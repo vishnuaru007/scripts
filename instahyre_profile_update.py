@@ -9,8 +9,56 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-crsrfToken = "HFaJGtQwzlEO3wvXByCHK48kWn9nfGpK0l0cPYQSQbsTNVJNV5O0LjPTZSFJH0iW"
-sessionId = "vamb2sqaq16i5ssic0bs5hg3cqh8rqpt"
+
+def fetch_csrf_token(url):
+    # Start a session
+    session = requests.Session()
+
+    # Headers to mimic a real browser request
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+        'Connection': 'keep-alive',
+    }
+
+    # Send a GET request to the login page with headers
+    response = session.get(url, headers=headers)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Retrieve the cookies from the response
+        cookies = session.cookies
+
+        # Look for the 'csrftoken' in the cookies
+        csrf_token = cookies.get('csrftoken')
+
+        if csrf_token:
+            return csrf_token
+        else:
+            print("CSRF Token not found.")
+            return None
+    else:
+        print(f"Failed to fetch the page. Status code: {response.status_code}")
+        return None
+
+# URL of the website's login page
+url = "https://www.instahyre.com/login/"
+
+# Fetch and return the CSRF token
+token = fetch_csrf_token(url)
+
+if token:
+    print(f"Fetched CSRF Token: {token}")
+else:
+    error_message = "Failed to retrieve CSRF Token."
+    logging.error(error_message)
+
+
+crsrfToken = token
+
+sessionId = ''
 file_path = "/Users/vishnu.aru/apps/rnd/scripts/python/VishnuAru.pdf"  # Update with the path to your file
 login_data = {
     "email": "abc@gmail.com",
@@ -19,11 +67,6 @@ login_data = {
 
 cookies = {
     "csrftoken": crsrfToken,
-    "_ga": "GA1.2.34600236.1725410623",
-    "_gid": "GA1.2.1008061378.1725410631",
-    "_gat_UA-45611607-3": "1",
-    "_ga_0PQL61K7YN": "GS1.1.1725410623.1.0.1725410631.0.0.0",
-    "sessionid": sessionId
 }
 
 # Construct the cookie header string
@@ -55,12 +98,52 @@ response = requests.post(login_url, headers=headers, json=login_data)
 
 if response.status_code == 201:
     print("Login Successful")
-    # print(response.json())
+    set_cookie_header = response.headers.get('Set-Cookie')
+    if set_cookie_header:
+        cookies = set_cookie_header.split(',')
+        for cookie in cookies:
+            if 'sessionid=' in cookie:
+                session_id = cookie.strip().split('sessionid=')[1].split(';')[0]
+                # break
+            if 'csrftoken=' in cookie:
+                crsrfToken = cookie.strip().split('csrftoken=')[1].split(';')[0]
+
+        if session_id:
+            # print(f"Session ID found : {session_id}")
+            # print(f"csrftoken ID found : {crsrfToken}")
+            sessionId = session_id.strip()
+        else:
+            logging.error("Session ID not found in Set-Cookie header.")
+    else:
+        logging.error("Set-Cookie header not found in the response.")
 else:
     print(f"Login Failed: {response.status_code}")
-    error_message = f"Failed to update candidate. Status Code: {response.status_code}. Response Content: {response.text}"    
-    # Log error to file
+    error_message = f"Login Failed:. Status Code: {response.status_code}. Response Content: {response.text}"    
     logging.error(error_message)
+
+cookies = {
+    "csrftoken": crsrfToken,
+    "sessionid": sessionId
+}
+cookie_header = "; ".join([f"{key}={value}" for key, value in cookies.items()])
+
+headers = {
+    "accept": "application/json, text/plain, */*",
+    "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
+    "content-type": "application/json",
+    "cookie": cookie_header,
+    "origin": "https://www.instahyre.com",
+    "priority": "u=1, i",
+    "referer": "https://www.instahyre.com/login/",
+    "sec-ch-ua": '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"macOS"',
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "x-csrftoken": crsrfToken
+}
 
 # Update candidate profile
 candidate_update_url = "https://www.instahyre.com/api/v1/candidate_jsp/78962"
